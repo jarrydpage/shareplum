@@ -505,6 +505,62 @@ class _List2007:
                 data_out[result.attrib["ID"]] = result[0].text
         return data_out
 
+    def update_list(self, data, kind, mutate_data=False):  # type: (List[Dict[str, str]], str) -> Any
+        """Update List Items
+           kind = 'New', 'Update', or 'Delete'
+
+           New:
+           Provide data like so:
+               data = [{'Column': 'New Column', 'Type': 'New Type'}]
+
+           Update:
+           Provide data like so:
+               data = [{'OldColumn': 'Old Column Name'},
+                       {'NewColumn': 'New Column Name'}]
+
+           Delete:
+           Just provided a list column
+               data = ['DeleteColumn': 'Column To Delete']
+        """
+        if type(data) != list:
+            raise Exception("data must be a list of dictionaries")
+        # Build Request
+        soap_request = Soap("UpdateList")
+        soap_request.add_parameter("listName", self.list_name)
+        if kind != "Delete":
+            if mutate_data:
+                spdata = data
+                self._mutate_to_internal(spdata)
+            else:
+                spdata = self._convert_to_internal(data)
+        else:
+            spdata = data
+
+        soap_request.add_actions(spdata, kind)
+        self.last_request = str(soap_request)
+
+        # Send Request
+        response = post(self._session,
+                        url=self._url("Lists"),
+                        headers=self._headers("UpdateList"),
+                        data=str(soap_request).encode("utf-8"),
+                        verify=self._verify_ssl,
+                        timeout=self.timeout)
+
+        # Parse Response
+        envelope = etree.fromstring(response.text.encode("utf-8"),
+                                    parser=etree.XMLParser(huge_tree=self.huge_tree,
+                                    recover=True))
+        # TODO: Fix me
+        results = envelope[0][0][0][0]
+        data_out = {}  # type: Dict
+        for result in results:
+            if result.text != "0x00000000" and result[0].text != "0x00000000":
+                data_out[result.attrib["ID"]] = (result[0].text, result[1].text)
+            else:
+                data_out[result.attrib["ID"]] = result[0].text
+        return data_out
+    
     def get_attachment_collection(self, _id):  # type: (str) -> Any
         """Get Attachments for given List Item ID"""
 
@@ -533,6 +589,7 @@ class _List2007:
             attachments.append(attachment.text)
         return attachments
 
+  
     # Legacy API
     GetList = get_list
     GetListItems = get_list_items
@@ -540,6 +597,7 @@ class _List2007:
     GetViewCollection = get_view_collection
     GetAttachmentCollection = get_attachment_collection
     UpdateListItems = update_list_items
+    UpdateList = update_list
 
 
 class _List365(_List2007):
